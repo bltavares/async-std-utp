@@ -1,20 +1,23 @@
 #![feature(test)]
-
 extern crate test;
-extern crate utp;
 
-use test::Bencher;
-use utp::UtpSocket;
+use async_std::task;
+use async_std_utp::UtpSocket;
 use std::sync::Arc;
-use std::thread;
+use test::Bencher;
 
 macro_rules! iotry {
-    ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
+    ($e:expr) => {
+        match $e.await {
+            Ok(e) => e,
+            Err(e) => panic!("{}", e),
+        }
+    };
 }
 
 fn next_test_port() -> u16 {
-    use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
-    static NEXT_OFFSET: AtomicUsize = ATOMIC_USIZE_INIT;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static NEXT_OFFSET: AtomicUsize = AtomicUsize::new(0);
     const BASE_PORT: u16 = 9600;
     BASE_PORT + NEXT_OFFSET.fetch_add(1, Ordering::Relaxed) as u16
 }
@@ -29,21 +32,23 @@ fn bench_connection_setup_and_teardown(b: &mut Bencher) {
     let mut buf = [0; 1500];
 
     b.iter(|| {
-        let mut server = iotry!(UtpSocket::bind(server_addr));
+        let mut server = task::block_on(async { iotry!(UtpSocket::bind(server_addr)) });
 
-        thread::spawn(move || {
+        task::spawn(async move {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.close());
         });
 
-        loop {
-            match server.recv_from(&mut buf) {
-                Ok((0, _src)) => break,
-                Ok(_) => (),
-                Err(e) => panic!("{}", e)
+        task::block_on(task::spawn(async move {
+            loop {
+                match server.recv_from(&mut buf).await {
+                    Ok((0, _src)) => break,
+                    Ok(_) => (),
+                    Err(e) => panic!("{}", e),
+                }
             }
-        }
-        iotry!(server.close());
+            iotry!(server.close());
+        }));
     });
 }
 
@@ -57,22 +62,24 @@ fn bench_transfer_one_packet(b: &mut Bencher) {
 
     b.iter(|| {
         let data = data_arc.clone();
-        let mut server = iotry!(UtpSocket::bind(server_addr));
+        let mut server = task::block_on(async { iotry!(UtpSocket::bind(server_addr)) });
 
-        thread::spawn(move || {
+        task::spawn(async move {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.send_to(&data[..]));
             iotry!(client.close());
         });
 
-        loop {
-            match server.recv_from(&mut buf) {
-                Ok((0, _src)) => break,
-                Ok(_) => (),
-                Err(e) => panic!("{}", e)
+        task::block_on(task::spawn(async move {
+            loop {
+                match server.recv_from(&mut buf).await {
+                    Ok((0, _src)) => break,
+                    Ok(_) => (),
+                    Err(e) => panic!("{}", e),
+                }
             }
-        }
-        iotry!(server.close());
+            iotry!(server.close());
+        }));
     });
     b.bytes = len as u64;
 }
@@ -87,22 +94,24 @@ fn bench_transfer_one_megabyte(b: &mut Bencher) {
 
     b.iter(|| {
         let data = data_arc.clone();
-        let mut server = iotry!(UtpSocket::bind(server_addr));
+        let mut server = task::block_on(async { iotry!(UtpSocket::bind(server_addr)) });
 
-        thread::spawn(move || {
+        task::spawn(async move {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.send_to(&data[..]));
             iotry!(client.close());
         });
 
-        loop {
-            match server.recv_from(&mut buf) {
-                Ok((0, _src)) => break,
-                Ok(_) => (),
-                Err(e) => panic!("{}", e)
+        task::block_on(task::spawn(async move {
+            loop {
+                match server.recv_from(&mut buf).await {
+                    Ok((0, _src)) => break,
+                    Ok(_) => (),
+                    Err(e) => panic!("{}", e),
+                }
             }
-        }
-        iotry!(server.close());
+            iotry!(server.close());
+        }));
     });
     b.bytes = len as u64;
 }

@@ -1,21 +1,24 @@
 #![feature(test)]
-
 extern crate test;
-extern crate utp;
 
-use test::Bencher;
-use utp::UtpStream;
-use std::io::{Read, Write};
+use async_std::task;
+use async_std_utp::UtpStream;
+use futures::{AsyncReadExt, AsyncWriteExt};
 use std::sync::Arc;
-use std::thread;
+use test::Bencher;
 
 macro_rules! iotry {
-    ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
+    ($e:expr) => {
+        match $e.await {
+            Ok(e) => e,
+            Err(e) => panic!("{}", e),
+        }
+    };
 }
 
 fn next_test_port() -> u16 {
-    use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
-    static NEXT_OFFSET: AtomicUsize = ATOMIC_USIZE_INIT;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static NEXT_OFFSET: AtomicUsize = AtomicUsize::new(0);
     const BASE_PORT: u16 = 9600;
     BASE_PORT + NEXT_OFFSET.fetch_add(1, Ordering::Relaxed) as u16
 }
@@ -27,17 +30,20 @@ fn next_test_ip4<'a>() -> (&'a str, u16) {
 #[bench]
 fn bench_connection_setup_and_teardown(b: &mut Bencher) {
     let server_addr = next_test_ip4();
-    let mut received = vec!();
-    b.iter(|| {
-        let mut server = iotry!(UtpStream::bind(server_addr));
 
-        thread::spawn(move || {
+    b.iter(|| {
+        let mut server = task::block_on(async move { iotry!(UtpStream::bind(server_addr)) });
+
+        task::spawn(async move {
             let mut client = iotry!(UtpStream::connect(server_addr));
             iotry!(client.close());
         });
 
-        iotry!(server.read_to_end(&mut received));
-        iotry!(server.close());
+        task::block_on(task::spawn(async move {
+            let mut received = vec![];
+            iotry!(server.read_to_end(&mut received));
+            iotry!(server.close());
+        }));
     });
 }
 
@@ -47,20 +53,22 @@ fn bench_transfer_one_packet(b: &mut Bencher) {
     let server_addr = next_test_ip4();
     let data = (0..len).map(|x| x as u8).collect::<Vec<u8>>();
     let data_arc = Arc::new(data);
-    let mut received = Vec::with_capacity(len);
 
     b.iter(|| {
+        let mut server = task::block_on(async { iotry!(UtpStream::bind(server_addr)) });
         let data = data_arc.clone();
-        let mut server = iotry!(UtpStream::bind(server_addr));
 
-        thread::spawn(move || {
+        task::spawn(async move {
             let mut client = iotry!(UtpStream::connect(server_addr));
             iotry!(client.write(&data[..]));
             iotry!(client.close());
         });
 
-        iotry!(server.read_to_end(&mut received));
-        iotry!(server.close());
+        task::block_on(task::spawn(async move {
+            let mut received = Vec::with_capacity(len);
+            iotry!(server.read_to_end(&mut received));
+            iotry!(server.close());
+        }));
     });
     b.bytes = len as u64;
 }
@@ -71,20 +79,22 @@ fn bench_transfer_one_megabyte(b: &mut Bencher) {
     let server_addr = next_test_ip4();
     let data = (0..len).map(|x| x as u8).collect::<Vec<u8>>();
     let data_arc = Arc::new(data);
-    let mut received = Vec::with_capacity(len);
 
     b.iter(|| {
+        let mut server = task::block_on(async { iotry!(UtpStream::bind(server_addr)) });
         let data = data_arc.clone();
-        let mut server = iotry!(UtpStream::bind(server_addr));
 
-        thread::spawn(move || {
+        task::spawn(async move {
             let mut client = iotry!(UtpStream::connect(server_addr));
             iotry!(client.write(&data[..]));
             iotry!(client.close());
         });
 
-        iotry!(server.read_to_end(&mut received));
-        iotry!(server.close());
+        task::block_on(task::spawn(async move {
+            let mut received = Vec::with_capacity(len);
+            iotry!(server.read_to_end(&mut received));
+            iotry!(server.close());
+        }))
     });
     b.bytes = len as u64;
 }

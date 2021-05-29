@@ -1,16 +1,19 @@
-extern crate utp;
-
-use std::thread;
-use utp::UtpStream;
-use std::io::{Read, Write};
+use async_std::task;
+use async_std_utp::UtpStream;
+use futures::{AsyncReadExt, AsyncWriteExt};
 
 macro_rules! iotry {
-    ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
+    ($e:expr) => {
+        match $e.await {
+            Ok(e) => e,
+            Err(e) => panic!("{}", e),
+        }
+    };
 }
 
 fn next_test_port() -> u16 {
-    use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
-    static NEXT_OFFSET: AtomicUsize = ATOMIC_USIZE_INIT;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static NEXT_OFFSET: AtomicUsize = AtomicUsize::new(0);
     const BASE_PORT: u16 = 9600;
     BASE_PORT + NEXT_OFFSET.fetch_add(1, Ordering::Relaxed) as u16
 }
@@ -23,42 +26,42 @@ fn next_test_ip6<'a>() -> (&'a str, u16) {
     ("::1", next_test_port())
 }
 
-#[test]
-fn test_stream_open_and_close() {
+#[async_std::test]
+async fn test_stream_open_and_close() {
     let server_addr = next_test_ip4();
     let mut server = iotry!(UtpStream::bind(server_addr));
 
-    let child = thread::spawn(move || {
+    let child = task::spawn(async move {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.close());
         drop(client);
     });
 
-    let mut received = vec!();
+    let mut received = vec![];
     iotry!(server.read_to_end(&mut received));
     iotry!(server.close());
-    assert!(child.join().is_ok());
+    child.await;
 }
 
-#[test]
-fn test_stream_open_and_close_ipv6() {
+#[async_std::test]
+async fn test_stream_open_and_close_ipv6() {
     let server_addr = next_test_ip6();
     let mut server = iotry!(UtpStream::bind(server_addr));
 
-    let child = thread::spawn(move || {
+    let child = task::spawn(async move {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.close());
         drop(client);
     });
 
-    let mut received = vec!();
+    let mut received = vec![];
     iotry!(server.read_to_end(&mut received));
     iotry!(server.close());
-    assert!(child.join().is_ok());
+    child.await;
 }
 
-#[test]
-fn test_stream_small_data() {
+#[async_std::test]
+async fn test_stream_small_data() {
     // Fits in a packet
     const LEN: usize = 1024;
     let data: Vec<u8> = (0..LEN).map(|idx| idx as u8).collect();
@@ -68,7 +71,7 @@ fn test_stream_small_data() {
     let server_addr = next_test_ip4();
     let mut server = iotry!(UtpStream::bind(server_addr));
 
-    let child = thread::spawn(move || {
+    let child = task::spawn(async move {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.write(&d[..]));
         iotry!(client.close());
@@ -79,11 +82,11 @@ fn test_stream_small_data() {
     assert!(!received.is_empty());
     assert_eq!(received.len(), data.len());
     assert_eq!(received, data);
-    assert!(child.join().is_ok());
+    child.await;
 }
 
-#[test]
-fn test_stream_large_data() {
+#[async_std::test]
+async fn test_stream_large_data() {
     // Has to be sent over several packets
     const LEN: usize = 1024 * 1024;
     let data: Vec<u8> = (0..LEN).map(|idx| idx as u8).collect();
@@ -93,7 +96,7 @@ fn test_stream_large_data() {
     let server_addr = next_test_ip4();
     let mut server = iotry!(UtpStream::bind(server_addr));
 
-    let child = thread::spawn(move || {
+    let child = task::spawn(async move {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.write(&d[..]));
         iotry!(client.close());
@@ -104,11 +107,11 @@ fn test_stream_large_data() {
     assert!(!received.is_empty());
     assert_eq!(received.len(), data.len());
     assert_eq!(received, data);
-    assert!(child.join().is_ok());
+    child.await;
 }
 
-#[test]
-fn test_stream_successive_reads() {
+#[async_std::test]
+async fn test_stream_successive_reads() {
     const LEN: usize = 1024;
     let data: Vec<u8> = (0..LEN).map(|idx| idx as u8).collect();
     assert_eq!(LEN, data.len());
@@ -117,7 +120,7 @@ fn test_stream_successive_reads() {
     let server_addr = next_test_ip4();
     let mut server = iotry!(UtpStream::bind(server_addr));
 
-    let child = thread::spawn(move || {
+    let child = task::spawn(async move {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.write(&d[..]));
         iotry!(client.close());
@@ -129,18 +132,18 @@ fn test_stream_successive_reads() {
     assert_eq!(received.len(), data.len());
     assert_eq!(received, data);
 
-    assert_eq!(server.read(&mut received).unwrap(), 0);
-    assert!(child.join().is_ok());
+    assert_eq!(server.read(&mut received).await.unwrap(), 0);
+    child.await;
 }
 
-#[test]
-fn test_local_addr() {
+#[async_std::test]
+async fn test_local_addr() {
     use std::net::ToSocketAddrs;
 
     let addr = next_test_ip4();
     let addr = addr.to_socket_addrs().unwrap().next().unwrap();
-    let stream = UtpStream::bind(addr).unwrap();
+    let stream = UtpStream::bind(addr).await.unwrap();
 
-    assert!(stream.local_addr().is_ok());
-    assert_eq!(stream.local_addr().unwrap(), addr);
+    assert!(stream.local_addr().await.is_ok());
+    assert_eq!(stream.local_addr().await.unwrap(), addr);
 }

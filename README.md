@@ -1,15 +1,20 @@
-# rust-utp
+# async-std-utp
 
-[![Crate Version](https://img.shields.io/crates/v/utp.svg?style=flat)](https://crates.io/crates/utp)
-[![Build Status](https://img.shields.io/travis/meqif/rust-utp.svg?style=flat)](http://travis-ci.org/meqif/rust-utp)
-[![Windows Build Status](https://ci.appveyor.com/api/projects/status/q38b38fendqat8o6?svg=true)](https://ci.appveyor.com/project/meqif/rust-utp)
-[![codecov](https://codecov.io/gh/meqif/rust-utp/branch/master/graph/badge.svg)](https://codecov.io/gh/meqif/rust-utp)
-[![Dependency Status](https://dependencyci.com/github/meqif/rust-utp/badge)](https://dependencyci.com/github/meqif/rust-utp)
+<a href="https://github.com/bltavares/async-std-utp/actions?query=workflow%3AQuickstart+branch%3Amaster">
+    <img src="https://img.shields.io/github/workflow/status/bltavares/async-std-utp/Quickstart/master?label=main%20ci" />
+</a>
+<a href="https://github.com/bltavares/async-std-utp/actions?query=workflow%3ACross-compile+branch%3Amaster">
+    <img src="https://img.shields.io/github/workflow/status/bltavares/async-std-utp/Cross-compile/master?label=cross%20ci" />
+</a>
+<a href="https://crates.io/crates/async-std-utp">
+    <img src="https://img.shields.io/crates/v/async-std-utp.svg" />
+</a>
+<a href="https://docs.rs/async-std-utp">
+    <img src="https://docs.rs/async-std-utp/badge.svg" />
+</a>
 
 A [Micro Transport Protocol](http://www.bittorrent.org/beps/bep_0029.html)
-library implemented in Rust.
-
-[API documentation](http://meqif.github.io/rust-utp/)
+library implemented in Rust - integrated with [async-std](https://async.rs).
 
 ## Overview
 
@@ -26,17 +31,11 @@ presents a stream interface (`UtpStream`).
 
 ## Usage
 
-To use `utp`, add this to your `Cargo.toml`:
+To use `async-std-utp`, add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-utp = "*"
-```
-
-Then, import it in your crate root or wherever you need it:
-
-```rust
-extern crate utp;
+async-std-utp = "*"
 ```
 
 ## Examples
@@ -44,21 +43,21 @@ extern crate utp;
 The simplest example program would be:
 
 ```rust
-extern crate utp;
 
-use utp::UtpStream;
-use std::io::Write;
+use async_std_utp::UtpStream;
+use async_std::prelude::*;
 
-fn main() {
+#[async_std::main]
+async fn main() {
     // Connect to an hypothetical local server running on port 8080
     let addr = "127.0.0.1:8080";
-    let mut stream = UtpStream::connect(addr).expect("Error connecting to remote peer");
+    let mut stream = UtpStream::connect(addr).await.expect("Error connecting to remote peer");
 
     // Send a string
-    stream.write("Hi there!".as_bytes()).expect("Write failed");
+    stream.write("Hi there!".as_bytes()).await.expect("Write failed");
 
     // Close the stream
-    stream.close().expect("Error closing connection");
+    stream.close().await.expect("Error closing connection");
 }
 ```
 
@@ -68,16 +67,16 @@ Check out the files under the "examples" directory for more example programs, or
 
 - [x] congestion control
 - [x] proper connection closing
-    - [x] handle both RST and FIN
-    - [x] send FIN on close
-    - [x] automatically send FIN on `drop` if not already closed
+  - [x] handle both RST and FIN
+  - [x] send FIN on close
+  - [x] automatically send FIN on `drop` if not already closed
 - [x] sending RST on mismatch
 - [x] setters and getters that hide header field endianness conversion
 - [x] SACK extension
 - [x] handle packet loss
-    - [x] send triple-ACK to re-request lost packet (fast resend request)
-    - [x] rewind send window and resend in reply to triple-ACK (fast resend)
-    - [x] resend packet on ACK timeout
+  - [x] send triple-ACK to re-request lost packet (fast resend request)
+  - [x] rewind send window and resend in reply to triple-ACK (fast resend)
+  - [x] resend packet on ACK timeout
 - [x] stream interface
 - [x] handle unordered packets
 - [x] duplicate packet handling
@@ -91,3 +90,7 @@ Check out the files under the "examples" directory for more example programs, or
 This library is distributed under similar terms to Rust: dual licensed under the MIT license and the Apache license (version 2.0).
 
 See LICENSE-APACHE, LICENSE-MIT, and COPYRIGHT for details.
+
+## Considerations
+
+Based on the work of [rust-utp](https://github.com/meqif/rust-utp). Thank you.

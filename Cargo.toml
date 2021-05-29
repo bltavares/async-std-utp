@@ -1,30 +1,31 @@
 [package]
-authors = ["Ricardo Martins <ricardo@scarybox.net>"]
-description = "A µTP (Micro/uTorrent Transport Library) library implemented in Rust"
-documentation = "http://meqif.github.io/rust-utp"
-homepage = "https://github.com/meqif/rust-utp"
-keywords = ["utp", "networking", "protocol", "transport"]
+authors = ["Ricardo Martins <ricardo@scarybox.net>", "Bruno Tavares <connect@github.com>"]
+description = "A µTP (Micro/uTorrent Transport Library) library implemented in Rust using async-std"
+documentation = "https://github.com/bltavares/async-std-utp"
+homepage = "https://github.com/bltavares/async-std-utp"
+keywords = ["utp", "networking", "protocol", "transport", "async-std"]
 license = "MIT/Apache-2.0"
 name = "utp"
 readme = "README.md"
-repository = "https://github.com/meqif/rust-utp"
-version = "0.7.1-pre"
+repository = "https://github.com/bltavares/async-std-utp"
+version = "0.1.0"
+edition = "2018"
 
 [dependencies]
-env_logger = "0.3"
-log = "0.3"
-num-traits = "0.1"
-rand = "0.3"
-
-[dependencies.clippy]
-optional = true
-version = "0.0.131"
+async-std = '1.9.0'
+futures = "0.3.15"
+async-recursion = "0.3.2"
+log = "0.4.14"
+num-traits = "0.2.14"
+rand = "0.8.3"
 
 [dev-dependencies]
-quickcheck = "0.4"
+quickcheck = "1.0.3"
+env_logger = "0.8.3"
+async-std = { version = '1.9.0', features = ['attributes'] }
 
 [lib]
-name = "utp"
+name = "async_std_utp"
 
 [features]
 unstable = []
