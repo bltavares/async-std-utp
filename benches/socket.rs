@@ -1,16 +1,14 @@
 #![feature(test)]
-
 extern crate test;
-extern crate utp;
 
+use async_std::task;
+use async_std_utp::UtpSocket;
 use std::sync::Arc;
-use std::thread;
 use test::Bencher;
-use utp::UtpSocket;
 
 macro_rules! iotry {
     ($e:expr) => {
-        match $e {
+        match $e.await {
             Ok(e) => e,
             Err(e) => panic!("{}", e),
         }
@@ -34,21 +32,23 @@ fn bench_connection_setup_and_teardown(b: &mut Bencher) {
     let mut buf = [0; 1500];
 
     b.iter(|| {
-        let mut server = iotry!(UtpSocket::bind(server_addr));
+        let mut server = task::block_on(async { iotry!(UtpSocket::bind(server_addr)) });
 
-        thread::spawn(move || {
+        task::spawn(async move {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.close());
         });
 
-        loop {
-            match server.recv_from(&mut buf) {
-                Ok((0, _src)) => break,
-                Ok(_) => (),
-                Err(e) => panic!("{}", e),
+        task::block_on(task::spawn(async move {
+            loop {
+                match server.recv_from(&mut buf).await {
+                    Ok((0, _src)) => break,
+                    Ok(_) => (),
+                    Err(e) => panic!("{}", e),
+                }
             }
-        }
-        iotry!(server.close());
+            iotry!(server.close());
+        }));
     });
 }
 
@@ -62,22 +62,24 @@ fn bench_transfer_one_packet(b: &mut Bencher) {
 
     b.iter(|| {
         let data = data_arc.clone();
-        let mut server = iotry!(UtpSocket::bind(server_addr));
+        let mut server = task::block_on(async { iotry!(UtpSocket::bind(server_addr)) });
 
-        thread::spawn(move || {
+        task::spawn(async move {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.send_to(&data[..]));
             iotry!(client.close());
         });
 
-        loop {
-            match server.recv_from(&mut buf) {
-                Ok((0, _src)) => break,
-                Ok(_) => (),
-                Err(e) => panic!("{}", e),
+        task::block_on(task::spawn(async move {
+            loop {
+                match server.recv_from(&mut buf).await {
+                    Ok((0, _src)) => break,
+                    Ok(_) => (),
+                    Err(e) => panic!("{}", e),
+                }
             }
-        }
-        iotry!(server.close());
+            iotry!(server.close());
+        }));
     });
     b.bytes = len as u64;
 }
@@ -92,22 +94,24 @@ fn bench_transfer_one_megabyte(b: &mut Bencher) {
 
     b.iter(|| {
         let data = data_arc.clone();
-        let mut server = iotry!(UtpSocket::bind(server_addr));
+        let mut server = task::block_on(async { iotry!(UtpSocket::bind(server_addr)) });
 
-        thread::spawn(move || {
+        task::spawn(async move {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.send_to(&data[..]));
             iotry!(client.close());
         });
 
-        loop {
-            match server.recv_from(&mut buf) {
-                Ok((0, _src)) => break,
-                Ok(_) => (),
-                Err(e) => panic!("{}", e),
+        task::block_on(task::spawn(async move {
+            loop {
+                match server.recv_from(&mut buf).await {
+                    Ok((0, _src)) => break,
+                    Ok(_) => (),
+                    Err(e) => panic!("{}", e),
+                }
             }
-        }
-        iotry!(server.close());
+            iotry!(server.close());
+        }));
     });
     b.bytes = len as u64;
 }

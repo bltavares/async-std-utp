@@ -1,5 +1,6 @@
 //! Implementation of a simple uTP client and server.
 use env_logger;
+use futures::{AsyncReadExt, AsyncWriteExt};
 
 use std::process;
 
@@ -8,9 +9,10 @@ fn usage() -> ! {
     process::exit(1);
 }
 
-fn main() {
+#[async_std::main]
+async fn main() {
+    use async_std_utp::UtpStream;
     use std::io::{stderr, stdin, stdout, Read, Write};
-    use utp::UtpStream;
 
     // This example may run in either server or client mode.
     // Using an enum tends to make the code cleaner and easier to read.
@@ -46,7 +48,7 @@ fn main() {
     match mode {
         Mode::Server => {
             // Create a listening stream
-            let mut stream = UtpStream::bind(addr).expect("Error binding stream");
+            let mut stream = UtpStream::bind(addr).await.expect("Error binding stream");
             let mut writer = stdout();
             let _ = writeln!(&mut stderr(), "Serving on {}", addr);
 
@@ -57,7 +59,7 @@ fn main() {
             // Reading and printing chunks like this feels more interactive than trying to read
             // everything with `read_to_end` and avoids resizing the buffer multiple times.
             loop {
-                match stream.read(&mut payload) {
+                match stream.read(&mut payload).await {
                     Ok(0) => break,
                     Ok(read) => writer
                         .write(&payload[..read])
@@ -68,7 +70,9 @@ fn main() {
         }
         Mode::Client => {
             // Create a stream and try to connect to the remote address
-            let mut stream = UtpStream::connect(addr).expect("Error connecting to remote peer");
+            let mut stream = UtpStream::connect(addr)
+                .await
+                .expect("Error connecting to remote peer");
             let mut reader = stdin();
 
             // Create a reasonably sized buffer
@@ -83,16 +87,17 @@ fn main() {
                     Ok(0) => break,
                     Ok(read) => stream
                         .write(&payload[..read])
+                        .await
                         .expect("Error writing to stream"),
                     Err(e) => {
-                        stream.close().expect("Error closing stream");
+                        stream.close().await.expect("Error closing stream");
                         panic!("{:?}", e);
                     }
                 };
             }
 
             // Explicitly close the stream.
-            stream.close().expect("Error closing stream");
+            stream.close().await.expect("Error closing stream");
         }
     }
 }
