@@ -5,7 +5,7 @@ documentation = "https://github.com/bltavares/async-std-utp"
 homepage = "https://github.com/bltavares/async-std-utp"
 keywords = ["utp", "networking", "protocol", "transport", "async-std"]
 license = "MIT/Apache-2.0"
-name = "utp"
+name = "async-std-utp"
 readme = "README.md"
 repository = "https://github.com/bltavares/async-std-utp"
 version = "0.1.0"
@@ -23,9 +23,6 @@ rand = "0.8.3"
 quickcheck = "1.0.3"
 env_logger = "0.8.3"
 async-std = { version = '1.9.0', features = ['attributes'] }
-
-[lib]
-name = "async_std_utp"
 
 [features]
 unstable = []
