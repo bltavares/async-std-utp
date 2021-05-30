@@ -144,6 +144,44 @@ async fn test_local_addr() {
     let addr = addr.to_socket_addrs().unwrap().next().unwrap();
     let stream = UtpStream::bind(addr).await.unwrap();
 
-    assert!(stream.local_addr().await.is_ok());
-    assert_eq!(stream.local_addr().await.unwrap(), addr);
+    assert!(stream.local_addr().is_ok());
+    assert_eq!(stream.local_addr().unwrap(), addr);
+}
+
+#[async_std::test]
+async fn test_clone() {
+    use std::net::ToSocketAddrs;
+
+    let addr = next_test_ip4();
+    let addr = addr.to_socket_addrs().unwrap().next().unwrap();
+    let response = task::spawn(async move {
+        let mut server = UtpStream::bind(addr).await.unwrap();
+        let mut response = Vec::with_capacity(6);
+
+        let mut buf = vec![0; 3];
+        server.read(&mut buf).await.unwrap();
+        response.append(&mut buf);
+
+        let mut buf = vec![0; 3];
+        server.read(&mut buf).await.unwrap();
+        response.append(&mut buf);
+
+        response
+    });
+
+    let mut client1 = UtpStream::connect(addr).await.unwrap();
+    let mut client2 = client1.clone();
+
+    task::spawn(async move {
+        client1.write(&[0, 1, 2]).await.unwrap();
+    })
+    .await;
+
+    task::spawn(async move {
+        client2.write(&[3, 4, 5]).await.unwrap();
+    })
+    .await;
+
+    let result = response.await;
+    assert_eq!(result, vec![0, 1, 2, 3, 4, 5]);
 }

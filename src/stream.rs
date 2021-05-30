@@ -1,6 +1,6 @@
 use async_std::{io, net::ToSocketAddrs, sync::RwLock};
 use futures::{future::BoxFuture, ready, AsyncRead, AsyncWrite, FutureExt};
-use std::{io::Result, net::SocketAddr, sync::Arc, task::Poll};
+use std::{fmt::Debug, io::Result, net::SocketAddr, sync::Arc, task::Poll};
 
 use crate::socket::UtpSocket;
 
@@ -26,7 +26,7 @@ use crate::socket::UtpSocket;
 /// let _ = stream.read(&mut [0; 1000]).await;
 /// # }); }
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UtpStream {
     socket: Arc<RwLock<UtpSocket>>,
     futures: Arc<UtpStreamFutures>,
@@ -41,6 +41,12 @@ struct UtpStreamFutures {
     write: OptionIoFuture<usize>,
     flush: OptionIoFuture<()>,
     close: OptionIoFuture<()>,
+}
+
+impl std::fmt::Debug for UtpStreamFutures {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "UtpStreamFutures state")
+    }
 }
 
 impl UtpStream {
@@ -82,8 +88,13 @@ impl UtpStream {
     }
 
     /// Returns the socket address of the local half of this uTP connection.
-    pub async fn local_addr(&self) -> Result<SocketAddr> {
-        self.socket.read().await.local_addr()
+    pub fn local_addr(&self) -> Result<SocketAddr> {
+        self.socket.try_read().unwrap().local_addr()
+    }
+
+    /// Returns the socket address of the remote half of this uTP connection.
+    pub fn peer_addr(&self) -> Result<SocketAddr> {
+        self.socket.try_read().unwrap().peer_addr()
     }
 
     /// Changes the maximum number of retransmission retries on the underlying socket.

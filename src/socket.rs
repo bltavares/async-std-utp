@@ -97,10 +97,10 @@ async fn take_address<A: ToSocketAddrs>(addr: A) -> Result<SocketAddr> {
 /// socket.close().await;
 /// }); }
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct UtpSocket {
     /// The wrapped UDP socket
-    socket: Arc<UdpSocket>,
+    socket: UdpSocket,
 
     /// Remote peer
     connected_to: SocketAddr,
@@ -186,7 +186,7 @@ impl UtpSocket {
         let (receiver_id, sender_id) = generate_sequential_identifiers();
 
         UtpSocket {
-            socket: s.into(),
+            socket: s,
             connected_to: src,
             receiver_connection_id: receiver_id,
             sender_connection_id: sender_id,
@@ -1196,9 +1196,10 @@ impl Drop for UtpSocket {
 ///     }
 /// # }); }
 /// ```
+#[derive(Clone)]
 pub struct UtpListener {
     /// The public facing UDP socket
-    socket: UdpSocket,
+    socket: Arc<UdpSocket>,
 }
 
 impl UtpListener {
@@ -1212,7 +1213,9 @@ impl UtpListener {
     /// If more than one valid address is specified, only the first will be used.
     pub async fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpListener> {
         let socket = UdpSocket::bind(addr).await?;
-        Ok(UtpListener { socket })
+        Ok(UtpListener {
+            socket: socket.into(),
+        })
     }
 
     /// Accepts a new incoming connection from this listener.
@@ -2340,6 +2343,26 @@ mod test {
 
         assert!(listener.local_addr().is_ok());
         assert_eq!(listener.local_addr().unwrap(), addr);
+    }
+
+    #[async_std::test]
+    async fn test_listener_listener_clone() {
+        let addr = next_test_ip4();
+        let addr = addr.to_socket_addrs().unwrap().next().unwrap();
+
+        // setup listener and clone to be used on two tasks
+        let listener1 = UtpListener::bind(addr).await.unwrap();
+        let listener2 = listener1.clone();
+
+        task::spawn(async move { listener1.accept().await.unwrap() });
+        task::spawn(async move { listener2.accept().await.unwrap() });
+
+        // Connect twice - to each listerner
+        task::spawn(async move {
+            UtpSocket::connect(addr).await.unwrap();
+            UtpSocket::connect(addr).await.unwrap();
+        })
+        .await;
     }
 
     #[async_std::test]
