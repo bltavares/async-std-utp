@@ -144,8 +144,8 @@ async fn test_local_addr() {
     let addr = addr.to_socket_addrs().unwrap().next().unwrap();
     let stream = UtpStream::bind(addr).await.unwrap();
 
-    assert!(stream.local_addr().await.is_ok());
-    assert_eq!(stream.local_addr().await.unwrap(), addr);
+    assert!(stream.local_addr().is_ok());
+    assert_eq!(stream.local_addr().unwrap(), addr);
 }
 
 #[async_std::test]
