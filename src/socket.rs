@@ -81,7 +81,7 @@ async fn take_address<A: ToSocketAddrs>(addr: A) -> Result<SocketAddr> {
 ///
 /// let mut socket = UtpSocket::bind("127.0.0.1:1234").await.expect("Error binding socket");
 ///
-/// let mut buf = [0; 1000];
+/// let mut buf = vec![0; 1000];
 /// let (amt, _src) = socket.recv_from(&mut buf).await.expect("Error receiving");
 ///
 /// let mut buf = &mut buf[..amt];
@@ -258,7 +258,7 @@ impl UtpSocket {
         packet.set_seq_nr(socket.seq_nr);
 
         let mut len = 0;
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
 
         let mut syn_timeout = Duration::from_millis(socket.congestion_timeout);
         for _ in 0..MAX_SYN_RETRIES {
@@ -332,7 +332,7 @@ impl UtpSocket {
         self.state = SocketState::FinSent;
 
         // Receive JAKE
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
         while self.state != SocketState::Closed {
             self.recv(&mut buf).await?;
         }
@@ -373,7 +373,7 @@ impl UtpSocket {
     }
 
     async fn recv(&mut self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
-        let mut b = [0; BUF_SIZE + HEADER_SIZE];
+        let mut b = vec![0; BUF_SIZE + HEADER_SIZE];
         let start = Instant::now();
         let (read, src);
         let mut retries = 0;
@@ -621,7 +621,7 @@ impl UtpSocket {
 
     /// Consumes acknowledgements for every pending packet.
     pub async fn flush(&mut self) -> Result<()> {
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
         while !self.send_window.is_empty() {
             debug!("packets in send window: {}", self.send_window.len());
             self.recv(&mut buf).await?;
@@ -655,7 +655,7 @@ impl UtpSocket {
             debug!("max_inflight: {}", max_inflight);
             debug!("self.duplicate_ack_count: {}", self.duplicate_ack_count);
             debug!("now_microseconds() - now = {}", now_microseconds() - now);
-            let mut buf = [0u8; BUF_SIZE];
+            let mut buf = vec![0u8; BUF_SIZE];
             self.recv(&mut buf).await?;
         }
         debug!(
@@ -1219,7 +1219,7 @@ impl UtpListener {
     /// Notice that the resulting `UtpSocket` is bound to a different local port than the public
     /// listening port (which `UtpListener` holds). This may confuse the remote peer!
     pub async fn accept(&self) -> Result<(UtpSocket, SocketAddr)> {
-        let mut buf = [0; BUF_SIZE];
+        let mut buf = vec![0; BUF_SIZE];
 
         let (nread, src) = self.socket.recv_from(&mut buf).await?;
         let packet = Packet::try_from(&buf[..nread])?;
@@ -1353,7 +1353,7 @@ mod test {
             drop(client);
         });
 
-        let mut buf = [0; BUF_SIZE];
+        let mut buf = vec![0; BUF_SIZE];
         match server.recv_from(&mut buf).await {
             e => println!("{:?}", e),
         }
@@ -1392,7 +1392,7 @@ mod test {
             drop(client);
         });
 
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
         match server.recv_from(&mut buf).await {
             e => println!("{:?}", e),
         }
@@ -1422,7 +1422,7 @@ mod test {
         });
 
         // Make the server listen for incoming connections until the end of the input
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
         let _resp = server.recv_from(&mut buf).await;
         assert_eq!(server.state, SocketState::Closed);
 
@@ -1450,7 +1450,7 @@ mod test {
         });
 
         // Make the server listen for incoming connections
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
         let (_read, _src) = iotry!(server.recv_from(&mut buf));
         assert_eq!(server.state, SocketState::Closed);
 
@@ -1473,7 +1473,7 @@ mod test {
 
         let child = task::spawn(async move {
             // Make the server listen for incoming connections
-            let mut buf = [0u8; BUF_SIZE];
+            let mut buf = vec![0u8; BUF_SIZE];
             let _resp = server.recv(&mut buf).await;
             tx.send(server.seq_nr).unwrap();
 
@@ -1769,7 +1769,7 @@ mod test {
             iotry!(client.close());
         });
 
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
         // Expect SYN
         iotry!(server.recv(&mut buf));
 
@@ -1850,7 +1850,7 @@ mod test {
             drop(client);
         });
 
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
         server.recv(&mut buf).await.unwrap();
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(
@@ -1956,14 +1956,14 @@ mod test {
 
             // Receive one ACK
             for _ in 0..1 {
-                let mut buf = [0u8; BUF_SIZE];
+                let mut buf = vec![0u8; BUF_SIZE];
                 iotry!(client.socket.recv_from(&mut buf));
             }
 
             iotry!(client.close());
         });
 
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
         iotry!(server.recv(&mut buf));
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(
@@ -2022,7 +2022,7 @@ mod test {
             iotry!(client.close());
         });
 
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
         let mut received: Vec<u8> = vec![];
         loop {
             match server.recv_from(&mut buf).await {
@@ -2053,7 +2053,7 @@ mod test {
 
         let mut read = Vec::new();
         while server.state != SocketState::Closed {
-            let mut small_buffer = [0; 512];
+            let mut small_buffer = vec![0; 512];
             match server.recv_from(&mut small_buffer).await {
                 Ok((0, _src)) => break,
                 Ok((len, _src)) => read.extend(small_buffer[..len].to_vec()),
@@ -2092,7 +2092,7 @@ mod test {
             iotry!(client.close());
         });
 
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
         let mut received: Vec<u8> = vec![];
         loop {
             match server.recv_from(&mut buf).await {
@@ -2123,7 +2123,7 @@ mod test {
         let server = iotry!(UdpSocket::bind(server_addr));
 
         let child = task::spawn(async move {
-            let mut buf = [0u8; BUF_SIZE];
+            let mut buf = vec![0u8; BUF_SIZE];
             match server.recv_from(&mut buf).await {
                 Ok((_len, client_addr)) => {
                     iotry!(server.send_to(&[], client_addr));
@@ -2148,7 +2148,7 @@ mod test {
         let server = iotry!(UdpSocket::bind(server_addr));
 
         let child = task::spawn(async move {
-            let mut buf = [0u8; BUF_SIZE];
+            let mut buf = vec![0u8; BUF_SIZE];
             let mut packet = Packet::new();
             packet.set_type(PacketType::Data);
 
@@ -2176,7 +2176,7 @@ mod test {
         let mut server = iotry!(UtpSocket::bind(server_addr));
 
         let child = task::spawn(async move {
-            let mut buf = [0; BUF_SIZE];
+            let mut buf = vec![0; BUF_SIZE];
             loop {
                 match server.recv_from(&mut buf).await {
                     Ok((0, _src)) => break,
@@ -2194,7 +2194,7 @@ mod test {
         packet.set_seq_nr(client.seq_nr);
         packet.set_ack_nr(client.ack_nr);
         iotry!(client.socket.send_to(packet.as_ref(), server_addr));
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
         match client.socket.recv_from(&mut buf).await {
             Ok((len, _src)) => {
                 let reply = Packet::try_from(&buf[..len]).ok().unwrap();
@@ -2222,14 +2222,14 @@ mod test {
             packet.set_seq_nr(client.seq_nr);
             packet.set_ack_nr(client.ack_nr);
             iotry!(client.socket.send_to(packet.as_ref(), server_addr));
-            let mut buf = [0u8; BUF_SIZE];
+            let mut buf = vec![0u8; BUF_SIZE];
             match client.socket.recv_from(&mut buf).await {
                 Ok((_len, _src)) => (),
                 Err(e) => panic!("{:?}", e),
             }
         });
 
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
         loop {
             match server.recv_from(&mut buf).await {
                 Ok((0, _src)) => break,
@@ -2258,7 +2258,7 @@ mod test {
             iotry!(client.close());
         });
 
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
 
         // Accept connection
         iotry!(server.recv(&mut buf));
@@ -2351,13 +2351,13 @@ mod test {
 
         let child = task::spawn(async move {
             let mut client = iotry!(UtpSocket::connect(server_addr));
-            let mut buf = [0; 1024];
+            let mut buf = vec![0; 1024];
             tx.send(client.local_addr()).unwrap();
             iotry!(client.recv_from(&mut buf));
         });
 
         // Wait for a connection to be established
-        let mut buf = [0; 1024];
+        let mut buf = vec![0; 1024];
         iotry!(server.recv(&mut buf));
 
         // `peer_addr` should succeed and be equal to the client's address
@@ -2408,7 +2408,7 @@ mod test {
             // Simulate connection loss by killing the socket.
             client.state = SocketState::Closed;
             let ref socket = client.socket;
-            let mut buf = [0u8; BUF_SIZE];
+            let mut buf = vec![0u8; BUF_SIZE];
             iotry!(socket.recv_from(&mut buf));
             for _ in 0..attempts {
                 match socket.recv_from(&mut buf).await {
@@ -2422,13 +2422,13 @@ mod test {
         });
 
         // Drain incoming packets
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
         iotry!(server.recv_from(&mut buf));
 
         iotry!(server.send_to(&[0]));
 
         // Try to receive ACKs, time out too many times on flush, and fail with `TimedOut`
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
         match server.recv(&mut buf).await {
             Err(ref e) if e.kind() == ErrorKind::TimedOut => (),
             x => panic!("Expected Err(TimedOut), got {:?}", x),
@@ -2452,7 +2452,7 @@ mod test {
             // Simulate connection loss by killing the socket.
             client.state = SocketState::Closed;
             let ref socket = client.socket;
-            let mut buf = [0u8; BUF_SIZE];
+            let mut buf = vec![0u8; BUF_SIZE];
             iotry!(socket.recv_from(&mut buf));
             for _ in 0..attempts {
                 match socket.recv_from(&mut buf).await {
@@ -2466,7 +2466,7 @@ mod test {
         });
 
         // Drain incoming packets
-        let mut buf = [0u8; BUF_SIZE];
+        let mut buf = vec![0u8; BUF_SIZE];
         iotry!(server.recv_from(&mut buf));
 
         // Send FIN, time out too many times, and fail with `TimedOut`
@@ -2493,7 +2493,7 @@ mod test {
             client.state = SocketState::Closed;
             let ref socket = client.socket;
             let seq_nr = client.seq_nr;
-            let mut buf = [0u8; BUF_SIZE];
+            let mut buf = vec![0u8; BUF_SIZE];
             for _ in 0..(3 * attempts) {
                 match socket.recv_from(&mut buf).await {
                     Ok((len, _src)) => {
@@ -2507,11 +2507,11 @@ mod test {
         });
 
         // Drain incoming packets
-        let mut buf = [0; BUF_SIZE];
+        let mut buf = vec![0; BUF_SIZE];
         iotry!(server.recv_from(&mut buf));
 
         // Try to receive data, time out too many times, and fail with `TimedOut`
-        let mut buf = [0; BUF_SIZE];
+        let mut buf = vec![0; BUF_SIZE];
         match server.recv_from(&mut buf).await {
             Err(ref e) if e.kind() == ErrorKind::TimedOut => (),
             x => panic!("Expected Err(TimedOut), got {:?}", x),

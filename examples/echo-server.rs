@@ -5,7 +5,7 @@ use futures::StreamExt;
 use async_std_utp::{UtpListener, UtpSocket};
 
 async fn handle_client(mut s: UtpSocket) {
-    let mut buf = [0; 1500];
+    let mut buf = vec![0; 1500];
 
     // Reply to a data packet with its own payload, then end the connection
     match s.recv_from(&mut buf).await {

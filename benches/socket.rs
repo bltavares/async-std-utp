@@ -29,10 +29,10 @@ fn next_test_ip4<'a>() -> (&'a str, u16) {
 #[bench]
 fn bench_connection_setup_and_teardown(b: &mut Bencher) {
     let server_addr = next_test_ip4();
-    let mut buf = [0; 1500];
 
     b.iter(|| {
         let mut server = task::block_on(async { iotry!(UtpSocket::bind(server_addr)) });
+        let mut buf = vec![0; 1500];
 
         task::spawn(async move {
             let mut client = iotry!(UtpSocket::connect(server_addr));
@@ -56,13 +56,13 @@ fn bench_connection_setup_and_teardown(b: &mut Bencher) {
 fn bench_transfer_one_packet(b: &mut Bencher) {
     let len = 1024;
     let server_addr = next_test_ip4();
-    let mut buf = [0; 1500];
     let data = (0..len).map(|x| x as u8).collect::<Vec<u8>>();
     let data_arc = Arc::new(data);
 
     b.iter(|| {
-        let data = data_arc.clone();
         let mut server = task::block_on(async { iotry!(UtpSocket::bind(server_addr)) });
+        let data = data_arc.clone();
+        let mut buf = vec![0; 1500];
 
         task::spawn(async move {
             let mut client = iotry!(UtpSocket::connect(server_addr));
@@ -88,13 +88,13 @@ fn bench_transfer_one_packet(b: &mut Bencher) {
 fn bench_transfer_one_megabyte(b: &mut Bencher) {
     let len = 1024 * 1024;
     let server_addr = next_test_ip4();
-    let mut buf = [0; 1500];
     let data = (0..len).map(|x| x as u8).collect::<Vec<u8>>();
     let data_arc = Arc::new(data);
 
     b.iter(|| {
-        let data = data_arc.clone();
         let mut server = task::block_on(async { iotry!(UtpSocket::bind(server_addr)) });
+        let data = data_arc.clone();
+        let mut buf = vec![0; 1500];
 
         task::spawn(async move {
             let mut client = iotry!(UtpSocket::connect(server_addr));
