@@ -26,20 +26,21 @@ use crate::socket::UtpSocket;
 /// let _ = stream.read(&mut [0; 1000]).await;
 /// # }); }
 /// ```
-// #[derive(Clone)] // TODO cloenable upstream
+#[derive(Clone)]
 pub struct UtpStream {
     socket: Arc<RwLock<UtpSocket>>,
-    futures: UtpStreamFutures,
+    futures: Arc<UtpStreamFutures>,
 }
 
-type ReadFuture = Option<BoxFuture<'static, io::Result<(Vec<u8>, usize)>>>;
+unsafe impl Send for UtpStream {}
+type OptionIoFuture<T> = RwLock<Option<BoxFuture<'static, io::Result<T>>>>;
 
 #[derive(Default)]
 struct UtpStreamFutures {
-    read: ReadFuture,
-    write: Option<BoxFuture<'static, io::Result<usize>>>,
-    flush: Option<BoxFuture<'static, io::Result<()>>>,
-    close: Option<BoxFuture<'static, io::Result<()>>>,
+    read: OptionIoFuture<(Vec<u8>, usize)>,
+    write: OptionIoFuture<usize>,
+    flush: OptionIoFuture<()>,
+    close: OptionIoFuture<()>,
 }
 
 impl UtpStream {
@@ -53,7 +54,7 @@ impl UtpStream {
         let socket = UtpSocket::bind(addr).await?;
         Ok(UtpStream {
             socket: Arc::new(RwLock::new(socket)),
-            futures: UtpStreamFutures::default(),
+            futures: UtpStreamFutures::default().into(),
         })
     }
 
@@ -68,7 +69,7 @@ impl UtpStream {
         let socket = UtpSocket::connect(dst).await?;
         Ok(UtpStream {
             socket: Arc::new(RwLock::new(socket)),
-            futures: UtpStreamFutures::default(),
+            futures: UtpStreamFutures::default().into(),
         })
     }
 
@@ -93,14 +94,14 @@ impl UtpStream {
 
 impl AsyncRead for UtpStream {
     fn poll_read(
-        mut self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut [u8],
     ) -> std::task::Poll<Result<usize>> {
-        if self.futures.read.is_none() {
+        if self.futures.read.try_read().unwrap().is_none() {
             let socket = self.socket.clone();
             let mut vec = Vec::from(&buf[..]);
-            self.as_mut().futures.read = async move {
+            *self.futures.read.try_write().unwrap() = async move {
                 let (nread, _) = socket.write().await.recv_from(&mut vec).await?;
                 Ok((vec, nread))
             }
@@ -108,24 +109,26 @@ impl AsyncRead for UtpStream {
             .into();
         }
 
-        let fut = self.futures.read.as_mut().unwrap();
-        let (bytes, nread) = ready!(fut.poll_unpin(cx))?;
+        let (bytes, nread) = {
+            let mut fut = self.futures.read.try_write().unwrap();
+            ready!(fut.as_mut().unwrap().poll_unpin(cx))?
+        };
         buf.copy_from_slice(&bytes);
-        self.futures.read = None;
+        *self.futures.read.try_write().unwrap() = None;
         Poll::Ready(Ok(nread))
     }
 }
 
 impl AsyncWrite for UtpStream {
     fn poll_write(
-        mut self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> std::task::Poll<Result<usize>> {
-        if self.futures.write.is_none() {
+        if self.futures.write.try_read().unwrap().is_none() {
             let socket = self.socket.clone();
             let vec = Vec::from(buf);
-            self.as_mut().futures.write = async move {
+            *self.futures.write.try_write().unwrap() = async move {
                 let nread = socket.write().await.send_to(&vec).await?;
                 Ok(nread)
             }
@@ -133,43 +136,51 @@ impl AsyncWrite for UtpStream {
             .into();
         }
 
-        let fut = self.futures.write.as_mut().unwrap();
-        let nread = ready!(fut.poll_unpin(cx))?;
-        self.futures.write = None;
+        let nread = {
+            let mut fut = self.futures.write.try_write().unwrap();
+            ready!(fut.as_mut().unwrap().poll_unpin(cx))?
+        };
+        *self.futures.write.try_write().unwrap() = None;
         Poll::Ready(Ok(nread))
     }
 
     fn poll_flush(
-        mut self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<()>> {
-        if self.futures.flush.is_none() {
+        if self.futures.flush.try_read().unwrap().is_none() {
             let socket = self.socket.clone();
-            self.as_mut().futures.flush = async move { socket.write().await.flush().await }
-                .boxed()
-                .into();
+            *self.futures.flush.try_write().unwrap() =
+                async move { socket.write().await.flush().await }
+                    .boxed()
+                    .into();
         }
 
-        let fut = self.futures.flush.as_mut().unwrap();
-        let result = ready!(fut.poll_unpin(cx));
-        self.futures.flush = None;
+        let result = {
+            let mut fut = self.futures.flush.try_write().unwrap();
+            ready!(fut.as_mut().unwrap().poll_unpin(cx))
+        };
+        *self.futures.flush.try_write().unwrap() = None;
         Poll::Ready(result)
     }
 
     fn poll_close(
-        mut self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<()>> {
-        if self.futures.close.is_none() {
+        if self.futures.close.try_read().is_none() {
             let socket = self.socket.clone();
-            self.as_mut().futures.close = async move { socket.write().await.flush().await }
-                .boxed()
-                .into();
+            *self.futures.close.try_write().unwrap() =
+                async move { socket.write().await.flush().await }
+                    .boxed()
+                    .into();
         }
 
-        let fut = self.futures.close.as_mut().unwrap();
-        let result = ready!(fut.poll_unpin(cx));
-        self.futures.write = None;
+        let result = {
+            let mut fut = self.futures.close.try_write().unwrap();
+            ready!(fut.as_mut().unwrap().poll_unpin(cx))
+        };
+        *self.futures.close.try_write().unwrap() = None;
         Poll::Ready(result)
     }
 }
@@ -178,7 +189,7 @@ impl From<UtpSocket> for UtpStream {
     fn from(socket: UtpSocket) -> Self {
         UtpStream {
             socket: Arc::new(RwLock::new(socket)),
-            futures: UtpStreamFutures::default(),
+            futures: UtpStreamFutures::default().into(),
         }
     }
 }
