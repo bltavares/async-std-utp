@@ -1,8 +1,8 @@
+use async_std::{io, net::ToSocketAddrs, sync::RwLock};
 use futures::{future::BoxFuture, ready, AsyncRead, AsyncWrite, FutureExt};
+use std::{io::Result, net::SocketAddr, sync::Arc, task::Poll};
 
 use crate::socket::UtpSocket;
-use async_std::{io, net::ToSocketAddrs, sync::RwLock};
-use std::{io::Result, net::SocketAddr, sync::Arc, task::Poll};
 
 /// A structure that represents a uTP (Micro Transport Protocol) stream between a local socket and a
 /// remote socket.
@@ -100,10 +100,12 @@ impl AsyncRead for UtpStream {
         if self.futures.read.is_none() {
             let socket = self.socket.clone();
             let mut vec = Vec::from(&buf[..]);
-            self.as_mut().futures.read = Some(Box::pin(async move {
+            self.as_mut().futures.read = async move {
                 let (nread, _) = socket.write().await.recv_from(&mut vec).await?;
                 Ok((vec, nread))
-            }));
+            }
+            .boxed()
+            .into();
         }
 
         let fut = self.futures.read.as_mut().unwrap();
@@ -123,10 +125,12 @@ impl AsyncWrite for UtpStream {
         if self.futures.write.is_none() {
             let socket = self.socket.clone();
             let vec = Vec::from(buf);
-            self.as_mut().futures.write = Some(Box::pin(async move {
+            self.as_mut().futures.write = async move {
                 let nread = socket.write().await.send_to(&vec).await?;
                 Ok(nread)
-            }));
+            }
+            .boxed()
+            .into();
         }
 
         let fut = self.futures.write.as_mut().unwrap();
@@ -141,8 +145,9 @@ impl AsyncWrite for UtpStream {
     ) -> std::task::Poll<Result<()>> {
         if self.futures.flush.is_none() {
             let socket = self.socket.clone();
-            self.as_mut().futures.flush =
-                Some(Box::pin(async move { socket.write().await.flush().await }));
+            self.as_mut().futures.flush = async move { socket.write().await.flush().await }
+                .boxed()
+                .into();
         }
 
         let fut = self.futures.flush.as_mut().unwrap();
@@ -157,8 +162,9 @@ impl AsyncWrite for UtpStream {
     ) -> std::task::Poll<Result<()>> {
         if self.futures.close.is_none() {
             let socket = self.socket.clone();
-            self.as_mut().futures.close =
-                Some(Box::pin(async move { socket.write().await.flush().await }));
+            self.as_mut().futures.close = async move { socket.write().await.flush().await }
+                .boxed()
+                .into();
         }
 
         let fut = self.futures.close.as_mut().unwrap();

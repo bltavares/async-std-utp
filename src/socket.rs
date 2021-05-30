@@ -1,20 +1,21 @@
-use crate::error::SocketError;
-use crate::packet::*;
-use crate::time::*;
-use crate::util::*;
-use async_std::task;
 use async_std::{
     io,
     net::{SocketAddr, ToSocketAddrs, UdpSocket},
+    task,
 };
-use futures::future::BoxFuture;
-use futures::ready;
+use futures::FutureExt;
+use futures::{future::BoxFuture, ready};
 use log::debug;
 use std::cmp::{max, min};
 use std::collections::VecDeque;
 use std::io::{ErrorKind, Result};
 use std::task::Poll;
 use std::time::{Duration, Instant};
+
+use crate::error::SocketError;
+use crate::packet::*;
+use crate::time::*;
+use crate::util::*;
 
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
@@ -1284,7 +1285,7 @@ impl<'a> futures::Stream for Incoming<'a> {
     ) -> std::task::Poll<Option<Self::Item>> {
         loop {
             if self.accept.is_none() {
-                self.accept = Some(Box::pin(self.listener.accept()));
+                self.accept = Some(self.listener.accept().boxed());
             }
 
             if let Some(f) = &mut self.accept {
