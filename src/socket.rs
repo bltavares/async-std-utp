@@ -6,14 +6,11 @@ use async_std::{
 use futures::FutureExt;
 use futures::{future::BoxFuture, ready};
 use log::debug;
+use std::cmp::{max, min};
 use std::collections::VecDeque;
 use std::io::{ErrorKind, Result};
 use std::task::Poll;
 use std::time::{Duration, Instant};
-use std::{
-    cmp::{max, min},
-    sync::Arc,
-};
 
 use crate::error::SocketError;
 use crate::packet::*;
@@ -97,10 +94,10 @@ async fn take_address<A: ToSocketAddrs>(addr: A) -> Result<SocketAddr> {
 /// socket.close().await;
 /// }); }
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct UtpSocket {
     /// The wrapped UDP socket
-    socket: Arc<UdpSocket>,
+    socket: UdpSocket,
 
     /// Remote peer
     connected_to: SocketAddr,
@@ -186,7 +183,7 @@ impl UtpSocket {
         let (receiver_id, sender_id) = generate_sequential_identifiers();
 
         UtpSocket {
-            socket: s.into(),
+            socket: s,
             connected_to: src,
             receiver_connection_id: receiver_id,
             sender_connection_id: sender_id,
