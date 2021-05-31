@@ -1163,11 +1163,12 @@ impl UtpSocket {
     }
 }
 
+/// TODO Make it async drop when it's available in Rust
+/// Blocking is [known](https://ryhl.io/blog/async-what-is-blocking/) to cause issues
+/// But this is the best we can do for now. If the caller has manually called `.close`, it becomes a non-issue
 impl Drop for UtpSocket {
     fn drop(&mut self) {
-        task::block_on(async {
-            drop(self.close().await);
-        });
+        drop(task::block_on(self.close()));
     }
 }
 
