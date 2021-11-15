@@ -22,7 +22,7 @@ use crate::util::*;
 
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
-pub(crate) const BUF_SIZE: usize = 1500;
+pub(crate) const BUF_SIZE: usize = 1472;
 const GAIN: f64 = 1.0;
 const ALLOWED_INCREASE: u32 = 1;
 const TARGET: f64 = 100_000.0; // 100 milliseconds
